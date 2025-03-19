@@ -10,9 +10,11 @@ import (
 )
 
 type model struct {
-	Tabs       []string
-	TabContent []string
-	activeTab  int
+	Tabs          []string
+	activeTab     int
+	urlInput      string
+	queues        []string
+	selectedQueue int
 }
 
 func (m model) Init() tea.Cmd {
@@ -23,15 +25,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch keypress := msg.String(); keypress {
-		case "ctrl+c", "q":
+		case "ctrl+c":
+			// Save the last download
 			return m, tea.Quit
-		case "right", "l", "n", "tab":
+		case "right", "tab":
 			m.activeTab = min(m.activeTab+1, len(m.Tabs)-1)
 			return m, nil
-		case "left", "h", "p", "shift+tab":
+		case "left", "shift+tab":
 			m.activeTab = max(m.activeTab-1, 0)
 			return m, nil
 		case "down":
+			if m.activeTab == 0 {
+				m.selectedQueue = min(m.selectedQueue+1, len(m.queues)-1)
+			}
+			return m, nil
+		case "up":
+			if m.activeTab == 0 {
+				m.selectedQueue = max(m.selectedQueue-1, 0)
+			}
+			return m, nil
+		case "enter":
+			if m.activeTab == 0 {
+				// Handle the URL input and queue selection here
+				fmt.Printf("URL: %s, Selected Queue: %s\n", m.urlInput, m.queues[m.selectedQueue])
+				m.urlInput = ""
+			}
+
+			return m, nil
+		case "backspace":
+			if m.activeTab == 0 && len(m.urlInput) > 0 {
+				m.urlInput = m.urlInput[:len(m.urlInput)-1]
+			}
+		default:
+			if m.activeTab == 0 {
+				m.urlInput += keypress
+			}
 			return m, nil
 		}
 	}
@@ -87,14 +115,36 @@ func (m model) View() string {
 	row := lipgloss.JoinHorizontal(lipgloss.Top, renderedTabs...)
 	doc.WriteString(row)
 	doc.WriteString("\n")
-	doc.WriteString(windowStyle.Width((lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize())).Render(m.TabContent[m.activeTab]))
+
+	// The content inside the window
+	content := strings.Builder{}
+
+	if m.activeTab == 0 {
+		// URL
+		urlInput := fmt.Sprintf("URL: %s", m.urlInput)
+		content.WriteString(urlInput)
+		content.WriteString("\n\n")
+
+		// Queues list
+		for i, queue := range m.queues {
+			if i == m.selectedQueue {
+				content.WriteString(fmt.Sprintf("> %s\n", queue))
+			} else {
+				content.WriteString(fmt.Sprintf(" %s\n", queue))
+			}
+		}
+	} else {
+		// content.WriteString(m.TabContent[m.activeTab])
+	}
+	// fmt.Println("------------------------------\n", content.String())
+	doc.WriteString(windowStyle.Width((lipgloss.Width(row) - windowStyle.GetHorizontalFrameSize())).Render(content.String()))
 	return docStyle.Render(doc.String())
 }
 
 func Uimain() {
-	tabs := []string{"Lip Gloss", "Blush", "Eye Shadow", "Mascara", "Foundation"}
-	tabContent := []string{"Lip Gloss Tab", "Blush Tab", "Eye Shadow Tab", "Mascara Tab", "Foundation Tab"}
-	m := model{Tabs: tabs, TabContent: tabContent}
+	tabs := []string{"New Download", "Queues", "Downloads"}
+	queues := []string{"Queue 1", "Queue 2", "Queue 3"}
+	m := model{Tabs: tabs, queues: queues}
 	if _, err := tea.NewProgram(m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
