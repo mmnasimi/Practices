@@ -1,6 +1,6 @@
 package internal
 
 type Queue struct {
-	downloads []Download
+	downloads []DownloadRequest
 	size      int
 }
